@@ -1,0 +1,92 @@
+ds := [12,14,15,18,20,21,24,28,30,36,40,42,48,60,66,72,78,84,90,120,156,180];
+for d in ds do
+"d =", d;
+Kd<ed> := CyclotomicField(d); Od := Integers(Kd); Z := Integers();
+w := #TorsionUnitGroup(Kd);
+as := {SequenceToMultiset(a): a in RestrictedPartitions(2*d,4,{1..d-1})|Gcd(a) eq 1};
+ZA := {a : a in as|&and[&+[(x*Z!g) mod d: x in a] eq 2*d:g in [1..d-1]|IsCoprime(d,g)]};
+ZI := ZA diff {{*i,d-i,j,d-j*}: i, j in [1..d-1]};
+ZR := {};
+if d mod 2 eq 0 then
+    d2 := d div 2; 
+    ZR join:= {{*i,(d2+i) mod d,(d-2*i) mod d,d2*} : i in [1..d-1]};
+    ZR join:= {{*i,(d2+i) mod d,(d2+2*i) mod d,(d-4*i) mod d*} : i in [1..d-1]};
+end if;
+if d mod 3 eq 0 then
+    d3 := d div 3;
+    ZR join:= {{*i,(d3+i) mod d,(2*d3+i) mod d,(d-3*i) mod d*} : i in [1..d-1]};
+end if;
+ZR := {a: a in ZR|not 0 in a} meet ZI;
+ZE := ZI diff ZR;
+
+o:=Exponent(TorsionUnitGroup(Kd));
+prec:=30+8*d;
+pi:=Pi(RealField(prec));
+
+JacobiSum:= function(a,P)
+    p:= Norm(P);
+    assert IsPrime(p);
+    C:=ComplexField(prec); zetad:=Exp(2*Pi(C)*C.1/d); zetap:=Exp(2*Pi(C)*C.1/p); 
+    _,mp:=ResidueClassField(P); g:=mp(ed); A:=AssociativeArray(GF(p));
+    for u in [1..d] do A[g^u]:=zetad^u; end for;
+    res:=C!1.0/p^2;
+    for ai in a do
+        e:=(ai*((p-1) div d));
+        res*:=-&+[A[(GF(p)!u)^e]*zetap^u : u in [1..p-1]];
+    end for;
+    z := 2*d*Log(res)/2/pi;
+    appr:=BestApproximation(Imaginary(z),1000*o^2);
+    return Z!appr;
+end function;
+
+ClE := ClassGroup(Kd:Bound := 10^3, Proof := "Subgroup"); //this must be checked against Washington's table
+ClassGroupSetUseMemory(Od,false); 
+G, m := RayClassGroup(ideal<Od|2*w^2>);
+
+L := AbelianExtension(m);
+Ad := AbelianGroup([2*d]);
+
+ps := [p:p in PrimesUpTo(10^5)|p mod d eq 1];
+H := sub<G|>;
+Ps := [];
+Psm := [];
+
+for p in ps do
+        P := Factorization(ideal<Od|p>)[1][1];
+        g := P @@ m;
+        if not g in H and Gcd(Eltseq(g)) eq 1 then
+            Append(~Ps,P);
+            Append(~Psm,g);
+            H :=  H + sub<G|[g]>;
+        end if;
+        if H eq G then
+            break;
+        end if;
+end for;
+assert G eq H;
+
+U := G;
+for a in ZE do
+    mU := Homomorphism(G, Ad, Psm, [JacobiSum(a,P) * Ad.1:P in Ps]);
+    U meet:= Kernel(mU);
+end for;
+
+Ods,u := IndependentUnits(Od);
+mus := [1-ed^(d div p) : p in PrimeFactors(d)] cat [u(g): g in Generators(Ods)];
+Ads := AbelianGroup([w: i in [1..#mus]]);
+imgs := [];
+for P in Ps do
+    p:= Norm(P);
+    assert IsPrime(p);
+    _,mp:=ResidueClassField(P); g:=mp(Ods.1 @ u); A:=AssociativeArray(GF(p));
+    for u in [1..w] do A[g^u]:=u; end for;
+    Append(~imgs,Ads![A[mp(mu^(p div w))]:mu in mus]);
+end for;
+mR := Homomorphism(G, Ads, Psm, imgs);
+R := Kernel(mR);
+ 
+assert R subset U;
+"Galois group", TorsionInvariants(G/U);
+"Number field", NumberField(FixedField(L,U));
+
+end for;
